@@ -1,0 +1,131 @@
+import os;
+import sys
+from PIL import Image;
+import numpy as np;
+import math
+from numpy import linalg as LA
+import matplotlib.pyplot as plt
+
+numSamplesToTest = 154;
+subsampleSize = 40;
+count = 0;
+
+def standardize(A): #untested
+
+    sample = A[0];
+    for i in range(0, len(A[0])):
+        data = []
+        for samples in A:
+            data.append(samples[i])
+        # Now we have data for each feature stored in data
+        mean = np.mean(data)
+        std = np.std(data);
+        for j in range(0, len(A)):
+            if std != 0:
+                A[j][i] = (A[j][i] - mean) / std;
+
+    return A
+
+def maxes(arr, n):
+    maxes = np.zeros(n)
+    for num in range (0, n):
+        for i in range(0, len(arr)):
+            if arr[i] > maxes[num]:
+                maxes[num] = i
+        arr[maxes[num].astype(int)] = -99999
+
+    return maxes
+
+
+def projectPoints(d, v1, v2):
+
+    eigenData = [];
+    for observation in d:
+        projectedData = [ np.dot(observation, v1), np.dot(observation, v2) ]
+        eigenData.append(projectedData)
+
+    return eigenData
+
+class readData:
+
+    args = sys.argv
+    facesDir = "."
+    if len(args) ==  2:
+        facesDir = args[1]
+        print("Using directory " + facesDir)
+    else:
+        print("Please run this script as facespca <path_to_yalfaces_dir>")
+
+    data = np.ones((154, 1600))
+
+    # Read Files into data
+    for root, dirs, files in os.walk(facesDir):
+        for file in files:
+            if file.startswith("subject"):
+                im  = Image.open(os.path.join(facesDir, file), 'r');
+                arr = np.array(im)
+
+                m = len(arr)
+                n = len(arr[0])
+
+                # Subsample the image using a mean
+                subsampledImage = np.ones((subsampleSize, subsampleSize))
+
+                iincr = int(math.ceil(m/subsampleSize))
+                jincr = int(math.ceil(n/subsampleSize))
+                ioffset = 0;
+                joffset = 0;
+
+                for x in range(0, subsampleSize):
+                    for y in range(0, subsampleSize):
+
+                        # Read One Group of Pixels
+                        summation = 0;
+                        avg = 0
+                        for i in range (0,iincr):
+                            for j in range(0, jincr):
+                                if(ioffset+i < m and joffset+j < n):
+                                    summation += arr[ioffset+i][joffset+j]
+                        avg = summation / (iincr*jincr);
+                        subsampledImage[x][y] = avg
+                        joffset += jincr
+                    ioffset += iincr
+                    joffset =0;
+                im = Image.fromarray(subsampledImage)
+
+                # np.append(data[], subsampledImage.flatten())
+                data[count] = subsampledImage.flatten()
+                if count > numSamplesToTest:
+                    break
+                else:
+                    count += 1
+
+    # Now we have all the data
+
+    # Standardize Data
+    data2 = standardize(data)
+
+    # Compute covariance matrix (sigma)
+    transposedData = np.array(data2).transpose()
+    # x = np.vstack([transposedData])#)
+    sigma = np.cov(transposedData)
+
+    # Find Eigenvalues of covariance matrix
+    w,v = LA.eig(sigma);
+
+    #Find indices of max two eigenvalues
+    indix = maxes(w, 2)
+    v0 = v[indix[0].astype(int)]
+    v1 = v[indix[1].astype(int)]
+
+    # Project Onto first two eigenvalues
+    eigenSpaceData = projectPoints(data2, v0, v1)
+    eigenSpaceData = np.array(eigenSpaceData).transpose()
+
+    #plot data
+    plt.plot(eigenSpaceData[0], eigenSpaceData[1], 'ro')
+    plt.axis([-10, 10, -10, 10])
+    plt.show();
+    print(eigenSpaceData)
+    exit(0)
+
